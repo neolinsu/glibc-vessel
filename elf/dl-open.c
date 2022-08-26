@@ -45,6 +45,7 @@ struct dl_open_args
 {
   const char *file;
   int mode;
+  void* hint;
   /* This is the caller of the dlopen() function.  */
   const void *caller_dlopen;
   /* This is the caller of _dl_open().  */
@@ -190,7 +191,7 @@ dl_open_worker (void *a)
   /* Check whether _dl_open() has been called from a valid DSO.  */
   if (__check_caller (args->caller_dl_open,
 		      allow_libc|allow_libdl|allow_ldso) != 0)
-    _dl_signal_error (0, "dlopen", NULL, N_("invalid caller"));
+    _dl_signal_error (0, "dlopen(h)", NULL, N_("invalid caller"));
 
   /* Determine the caller's map if necessary.  This is needed in case
      we have a DST, when we don't know the namespace ID we have to put
@@ -221,8 +222,8 @@ dl_open_worker (void *a)
 
   /* Load the named object.  */
   struct link_map *new;
-  args->map = new = _dl_map_object (call_map, file, lt_loaded, 0,
-				    mode | __RTLD_CALLMAP, args->nsid);
+  args->map = new = _dl_map_objecth (call_map, file, lt_loaded, 0,
+				    mode | __RTLD_CALLMAP, args->hint, args->nsid);
 
   /* If the pointer returned is NULL this means the RTLD_NOLOAD flag is
      set and the object is not already loaded.  */
@@ -582,6 +583,113 @@ no more namespaces available for dlmopen()"));
   struct dl_open_args args;
   args.file = file;
   args.mode = mode;
+  args.hint = NULL;
+  args.caller_dlopen = caller_dlopen;
+  args.caller_dl_open = RETURN_ADDRESS (0);
+  args.map = NULL;
+  args.nsid = nsid;
+  args.argc = argc;
+  args.argv = argv;
+  args.env = env;
+
+  struct dl_exception exception;
+  int errcode = _dl_catch_exception (&exception, dl_open_worker, &args);
+
+#if defined USE_LDCONFIG && !defined MAP_COPY
+  /* We must unmap the cache file.  */
+  _dl_unload_cache ();
+#endif
+
+  /* See if an error occurred during loading.  */
+  if (__glibc_unlikely (exception.errstring != NULL))
+    {
+      /* Remove the object from memory.  It may be in an inconsistent
+	 state if relocation failed, for example.  */
+      if (args.map)
+	{
+	  /* Maybe some of the modules which were loaded use TLS.
+	     Since it will be removed in the following _dl_close call
+	     we have to mark the dtv array as having gaps to fill the
+	     holes.  This is a pessimistic assumption which won't hurt
+	     if not true.  There is no need to do this when we are
+	     loading the auditing DSOs since TLS has not yet been set
+	     up.  */
+	  if ((mode & __RTLD_AUDIT) == 0)
+	    GL(dl_tls_dtv_gaps) = true;
+
+	  _dl_close_worker (args.map, true);
+	}
+
+      assert (_dl_debug_initialize (0, args.nsid)->r_state == RT_CONSISTENT);
+
+      /* Release the lock.  */
+      __rtld_lock_unlock_recursive (GL(dl_load_lock));
+
+      /* Reraise the error.  */
+      _dl_signal_exception (errcode, &exception, NULL);
+    }
+
+  assert (_dl_debug_initialize (0, args.nsid)->r_state == RT_CONSISTENT);
+
+  /* Release the lock.  */
+  __rtld_lock_unlock_recursive (GL(dl_load_lock));
+
+  return args.map;
+}
+
+void *
+_dl_openh (const char *file, int mode, void *hint, const void *caller_dlopen, Lmid_t nsid,
+	  int argc, char *argv[], char *env[])
+{
+  if ((mode & RTLD_BINDING_MASK) == 0)
+    /* One of the flags must be set.  */
+    _dl_signal_error (EINVAL, file, NULL, N_("invalid mode for dlopen()"));
+
+  /* Make sure we are alone.  */
+  __rtld_lock_lock_recursive (GL(dl_load_lock));
+
+  if (__glibc_unlikely (nsid == LM_ID_NEWLM))
+    {
+      /* Find a new namespace.  */
+      for (nsid = 1; DL_NNS > 1 && nsid < GL(dl_nns); ++nsid)
+	if (GL(dl_ns)[nsid]._ns_loaded == NULL)
+	  break;
+
+      if (__glibc_unlikely (nsid == DL_NNS))
+	{
+	  /* No more namespace available.  */
+	  __rtld_lock_unlock_recursive (GL(dl_load_lock));
+
+	  _dl_signal_error (EINVAL, file, NULL, N_("\
+no more namespaces available for dlmopen()"));
+	}
+      else if (nsid == GL(dl_nns))
+	{
+	  __rtld_lock_initialize (GL(dl_ns)[nsid]._ns_unique_sym_table.lock);
+	  ++GL(dl_nns);
+	}
+
+      _dl_debug_initialize (0, nsid)->r_state = RT_CONSISTENT;
+    }
+  /* Never allow loading a DSO in a namespace which is empty.  Such
+     direct placements is only causing problems.  Also don't allow
+     loading into a namespace used for auditing.  */
+  else if (__glibc_unlikely (nsid != LM_ID_BASE && nsid != __LM_ID_CALLER)
+	   && (__glibc_unlikely (nsid < 0 || nsid >= GL(dl_nns))
+	       /* This prevents the [NSID] index expressions from being
+		  evaluated, so the compiler won't think that we are
+		  accessing an invalid index here in the !SHARED case where
+		  DL_NNS is 1 and so any NSID != 0 is invalid.  */
+	       || DL_NNS == 1
+	       || GL(dl_ns)[nsid]._ns_nloaded == 0
+	       || GL(dl_ns)[nsid]._ns_loaded->l_auditing))
+    _dl_signal_error (EINVAL, file, NULL,
+		      N_("invalid target namespace in dlmopen()"));
+
+  struct dl_open_args args;
+  args.file = file;
+  args.mode = mode;
+  args.hint = hint;
   args.caller_dlopen = caller_dlopen;
   args.caller_dl_open = RETURN_ADDRESS (0);
   args.map = NULL;

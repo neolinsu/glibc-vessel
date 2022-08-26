@@ -280,6 +280,7 @@ struct rtld_global_ro _rtld_global_ro attribute_relro =
     ._dl_lookup_symbol_x = _dl_lookup_symbol_x,
     ._dl_check_caller = _dl_check_caller,
     ._dl_open = _dl_open,
+	._dl_openh = _dl_openh,
     ._dl_close = _dl_close,
     ._dl_tls_get_addr_soft = _dl_tls_get_addr_soft,
 #ifdef HAVE_DL_DISCOVER_OSVERSION

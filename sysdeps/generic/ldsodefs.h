@@ -599,6 +599,8 @@ struct rtld_global_ro
   int (*_dl_check_caller) (const void *, enum allowmask);
   void *(*_dl_open) (const char *file, int mode, const void *caller_dlopen,
 		     Lmid_t nsid, int argc, char *argv[], char *env[]);
+  void *(*_dl_openh) (const char *file, int mode, void *hint, const void *caller_dlopen,
+		     Lmid_t nsid, int argc, char *argv[], char *env[]);
   void (*_dl_close) (void *map);
   void *(*_dl_tls_get_addr_soft) (struct link_map *);
 #ifdef HAVE_DL_DISCOVER_OSVERSION
@@ -856,6 +858,14 @@ extern struct link_map *_dl_map_object (struct link_map *loader,
 					int type, int trace_mode, int mode,
 					Lmid_t nsid) attribute_hidden;
 
+/* Open the shared object NAME and map in its segments.
+   LOADER's DT_RPATH is used in searching for NAME.
+   If the object is already opened, returns its existing map.  */
+extern struct link_map *_dl_map_objecth (struct link_map *loader,
+					const char *name,
+					int type, int trace_mode, int mode, void* hint,
+					Lmid_t nsid) attribute_hidden;
+
 /* Call _dl_map_object on the dependencies of MAP, and set up
    MAP->l_searchlist.  PRELOADS points to a vector of NPRELOADS previously
    loaded objects that will be inserted into MAP->l_searchlist after MAP
@@ -1110,6 +1120,13 @@ extern int _dl_check_caller (const void *caller, enum allowmask mask)
    hasn't already been run.  MODE is as for `dlopen' (see <dlfcn.h>).  If
    the object is already opened, returns its existing map.  */
 extern void *_dl_open (const char *name, int mode, const void *caller,
+		       Lmid_t nsid, int argc, char *argv[], char *env[])
+     attribute_hidden;
+
+/* Open the shared object NAME, relocate it, and run its initializer if it
+   hasn't already been run.  MODE is as for `dlopen' (see <dlfcn.h>).  If
+   the object is already opened, returns its existing map.  */
+extern void *_dl_openh (const char *name, int mode, void *hint, const void *caller,
 		       Lmid_t nsid, int argc, char *argv[], char *env[])
      attribute_hidden;
 

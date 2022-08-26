@@ -29,6 +29,7 @@ static __always_inline const char *
 _dl_map_segments (struct link_map *l, int fd,
                   const ElfW(Ehdr) *header, int type,
                   const struct loadcmd loadcmds[], size_t nloadcmds,
+                  void *hint,
                   const size_t maplength, bool has_holes,
                   struct link_map *loader)
 {
@@ -47,15 +48,23 @@ _dl_map_segments (struct link_map *l, int fd,
          As a refinement, sometimes we have an address that we would
          prefer to map such objects at; but this is only a preference,
          the OS can do whatever it likes. */
+      
       ElfW(Addr) mappref
         = (ELF_PREFERRED_ADDRESS (loader, maplength,
                                   c->mapstart & GLRO(dl_use_load_bias))
            - MAP_BASE_ADDR (l));
-
+      
+      ElfW(Addr) start_addr = mappref;
+      int mmap_arg = MAP_COPY|MAP_FILE;
+      if (hint != NULL) {
+        start_addr = (ElfW(Addr)) (hint);
+        mmap_arg = MAP_COPY|MAP_FILE|MAP_FIXED_NOREPLACE;
+      }
+      
       /* Remember which part of the address space this object uses.  */
-      l->l_map_start = (ElfW(Addr)) __mmap ((void *) mappref, maplength,
+      l->l_map_start = (ElfW(Addr)) __mmap ((void *) start_addr, maplength,
                                             c->prot,
-                                            MAP_COPY|MAP_FILE,
+                                            mmap_arg,
                                             fd, c->mapoff);
       if (__glibc_unlikely ((void *) l->l_map_start == MAP_FAILED))
         return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;

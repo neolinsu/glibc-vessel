@@ -858,7 +858,7 @@ static
 struct link_map *
 _dl_map_object_from_fd (const char *name, const char *origname, int fd,
 			struct filebuf *fbp, char *realname,
-			struct link_map *loader, int l_type, int mode,
+			struct link_map *loader, int l_type, int mode, void* hint,
 			void **stack_endp, Lmid_t nsid)
 {
   struct link_map *l = NULL;
@@ -1078,12 +1078,13 @@ _dl_map_object_from_fd (const char *name, const char *origname, int fd,
 	    }
 
 	  struct loadcmd *c = &loadcmds[nloadcmds++];
-	  c->mapstart = ALIGN_DOWN (ph->p_vaddr, GLRO(dl_pagesize));
+	 
+	  c->mapstart = ALIGN_DOWN (ph->p_vaddr, GLRO(dl_pagesize));	  	
 	  c->mapend = ALIGN_UP (ph->p_vaddr + ph->p_filesz, GLRO(dl_pagesize));
 	  c->dataend = ph->p_vaddr + ph->p_filesz;
 	  c->allocend = ph->p_vaddr + ph->p_memsz;
 	  c->mapoff = ALIGN_DOWN (ph->p_offset, GLRO(dl_pagesize));
-
+	
 	  /* Determine whether there is a gap between the last segment
 	     and this one.  */
 	  if (nloadcmds > 1 && c[-1].mapend != c->mapstart)
@@ -1178,7 +1179,7 @@ _dl_map_object_from_fd (const char *name, const char *origname, int fd,
        This is responsible for filling in:
        l_map_start, l_map_end, l_addr, l_contiguous, l_text_end, l_phdr
      */
-    errstring = _dl_map_segments (l, fd, header, type, loadcmds, nloadcmds,
+    errstring = _dl_map_segments (l, fd, header, type, loadcmds, nloadcmds, hint,
 				  maplength, has_holes, loader);
     if (__glibc_unlikely (errstring != NULL))
       goto call_lose;
@@ -1916,6 +1917,13 @@ struct link_map *
 _dl_map_object (struct link_map *loader, const char *name,
 		int type, int trace_mode, int mode, Lmid_t nsid)
 {
+	return _dl_map_objecth(loader, name,
+		type, trace_mode, mode, NULL, nsid);
+}
+struct link_map *
+_dl_map_objecth (struct link_map *loader, const char *name,
+		int type, int trace_mode, int mode, void *hint, Lmid_t nsid)
+{
   int fd;
   const char *origname = NULL;
   char *realname;
@@ -2222,7 +2230,7 @@ _dl_map_object (struct link_map *loader, const char *name,
 
   void *stack_end = __libc_stack_end;
   return _dl_map_object_from_fd (name, origname, fd, &fb, realname, loader,
-				 type, mode, &stack_end, nsid);
+				 type, mode, hint, &stack_end, nsid);
 }
 
 struct add_path_state

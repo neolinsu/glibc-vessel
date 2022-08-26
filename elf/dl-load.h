@@ -116,6 +116,7 @@ static const char *_dl_map_segments (struct link_map *l, int fd,
                                      const ElfW(Ehdr) *header, int type,
                                      const struct loadcmd loadcmds[],
                                      size_t nloadcmds,
+                                     void *hint,
                                      const size_t maplength,
                                      bool has_holes,
                                      struct link_map *loader);

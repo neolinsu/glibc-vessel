@@ -55,6 +55,12 @@ __BEGIN_DECLS
    passed to `dlsym' to get symbol values from it.  */
 extern void *dlopen (const char *__file, int __mode) __THROWNL;
 
+
+/* Open the shared object FILE and map it in; return a handle that can be
+   passed to `dlsym' to get symbol values from it.  */
+extern void *dlopenh (const char *__file, int __mode, void *hint) __THROWNL;
+
+
 /* Unmap and close a shared object opened by `dlopen'.
    The handle cannot be used again after calling `dlclose'.  */
 extern int dlclose (void *__handle) __THROWNL __nonnull ((1));

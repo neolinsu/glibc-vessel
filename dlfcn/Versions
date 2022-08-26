@@ -3,7 +3,7 @@ libdl {
     dladdr; dlclose; dlerror; dlopen; dlsym;
   }
   GLIBC_2.1 {
-    dlopen; dlvsym;
+    dlopen; dlvsym; dlopenh;
   }
   GLIBC_2.3.3 {
     dladdr1; dlinfo;
