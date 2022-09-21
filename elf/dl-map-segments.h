@@ -71,10 +71,6 @@ _dl_map_segments (struct link_map *l, int fd,
       malloc_t my_malloc = (malloc_t) *(vessel_malloc_ptr + _rdpid_safe());
       
       void * dest = my_malloc(VESSEL_ALIGN_SIZE, VESSEL_UPPER_ALIGN(maplength));
-      _dl_debug_printf("dest: %lx\n", (u_int64_t)dest);
-      _dl_debug_printf("dest to: %lx\n", (u_int64_t)dest+VESSEL_UPPER_ALIGN(maplength));
-//      _dl_debug_printf("diff: %ld\n", loadcmds[nloadcmds - 1].mapend - c->mapstart);
-//      _dl_debug_printf("maplength: %ld\n", maplength);
       memcpy(dest, res, maplength);
       
       if(__mprotect(dest, VESSEL_UPPER_ALIGN(maplength), c->prot)) {
@@ -147,10 +143,8 @@ _dl_map_segments (struct link_map *l, int fd,
       //        == MAP_FAILED))
 
     postmap:
-       _dl_debug_printf("1\n");
 
       _dl_postprocess_loadcmd (l, header, c);
-       _dl_debug_printf("2\n");
 
       if (c->allocend > c->dataend)
         {
@@ -204,7 +198,6 @@ _dl_map_segments (struct link_map *l, int fd,
   /* Notify ELF_PREFERRED_ADDRESS that we have to load this one
      fixed.  */
   ELF_FIXED_ADDRESS (loader, c->mapstart);
-  _dl_debug_printf("return\n");
 
   return NULL;
 }
