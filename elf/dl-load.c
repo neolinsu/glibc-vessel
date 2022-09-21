@@ -1309,7 +1309,6 @@ _dl_map_object_from_fd (const char *name, const char *origname, int fd,
 	{
 	  const uintptr_t p = (uintptr_t) &__stack_prot & -GLRO(dl_pagesize);
 	  const size_t s = (uintptr_t) (&__stack_prot + 1) - p;
-
 	  struct link_map *const m = &GL(dl_rtld_map);
 	  const uintptr_t relro_end = ((m->l_addr + m->l_relro_addr
 					+ m->l_relro_size)

@@ -25,6 +25,19 @@
    pages inside the gaps with PROT_NONE mappings rather than permitting
    other use of those parts of the address space).  */
 
+typedef void*(*malloc_t)(size_t alignment, size_t size);
+void** vessel_malloc_ptr = (void**) 0x8d042000;
+
+static __always_inline uint32_t _rdpid_safe(void)
+{
+	uint32_t a, d, c;
+	asm volatile("rdtscp" : "=a" (a), "=d" (d), "=c" (c));
+	return c;
+};
+
+#define VESSEL_ALIGN_SIZE  4096
+#define VESSEL_UPPER_ALIGN(size)   (((size) + VESSEL_ALIGN_SIZE - 1) & (~(VESSEL_ALIGN_SIZE - 1)))
+
 static __always_inline const char *
 _dl_map_segments (struct link_map *l, int fd,
                   const ElfW(Ehdr) *header, int type,
@@ -33,7 +46,7 @@ _dl_map_segments (struct link_map *l, int fd,
                   struct link_map *loader)
 {
   const struct loadcmd *c = loadcmds;
-
+  int ret;
   if (__glibc_likely (type == ET_DYN))
     {
       /* This is a position-independent shared object.  We can let the
@@ -53,12 +66,26 @@ _dl_map_segments (struct link_map *l, int fd,
            - MAP_BASE_ADDR (l));
 
       /* Remember which part of the address space this object uses.  */
-      l->l_map_start = (ElfW(Addr)) __mmap ((void *) mappref, maplength,
-                                            c->prot,
-                                            MAP_COPY|MAP_FILE,
-                                            fd, c->mapoff);
-      if (__glibc_unlikely ((void *) l->l_map_start == MAP_FAILED))
+      void * res = __mmap ((void*)mappref, maplength, PROT_READ, MAP_COPY|MAP_FILE, fd, c->mapoff);
+      
+      malloc_t my_malloc = (malloc_t) *(vessel_malloc_ptr + _rdpid_safe());
+      
+      void * dest = my_malloc(VESSEL_ALIGN_SIZE, VESSEL_UPPER_ALIGN(maplength));
+      _dl_debug_printf("dest: %lx\n", (u_int64_t)dest);
+      _dl_debug_printf("dest to: %lx\n", (u_int64_t)dest+VESSEL_UPPER_ALIGN(maplength));
+//      _dl_debug_printf("diff: %ld\n", loadcmds[nloadcmds - 1].mapend - c->mapstart);
+//      _dl_debug_printf("maplength: %ld\n", maplength);
+      memcpy(dest, res, maplength);
+      
+      if(__mprotect(dest, VESSEL_UPPER_ALIGN(maplength), c->prot)) {
+        _dl_debug_printf("Fail to mprotect for %d\n", errno);
+      }
+
+      l->l_map_start = (ElfW(Addr)) dest;
+      if (__glibc_unlikely ((void *) l->l_map_start == NULL)) {
+        _dl_debug_printf("Check\n");
         return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
+      }
 
       l->l_map_end = l->l_map_start + maplength;
       l->l_addr = l->l_map_start - c->mapstart;
@@ -73,8 +100,10 @@ _dl_map_segments (struct link_map *l, int fd,
           if (__glibc_unlikely
               (__mprotect ((caddr_t) (l->l_addr + c->mapend),
                            loadcmds[nloadcmds - 1].mapstart - c->mapend,
-                           PROT_NONE) < 0))
-            return DL_MAP_SEGMENTS_ERROR_MPROTECT;
+                           PROT_NONE) < 0)) {
+                              _dl_debug_printf("Check\n");
+                              return DL_MAP_SEGMENTS_ERROR_MPROTECT;
+                           }
         }
 
       l->l_contiguous = 1;
@@ -89,17 +118,39 @@ _dl_map_segments (struct link_map *l, int fd,
 
   while (c < &loadcmds[nloadcmds])
     {
-      if (c->mapend > c->mapstart
-          /* Map the segment contents from the file.  */
-          && (__mmap ((void *) (l->l_addr + c->mapstart),
+      if (c->mapend > c->mapstart ) {
+        void* c_res = __mmap (NULL,
                       c->mapend - c->mapstart, c->prot,
-                      MAP_FIXED|MAP_COPY|MAP_FILE,
-                      fd, c->mapoff)
-              == MAP_FAILED))
-        return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
+                      MAP_COPY|MAP_FILE,
+                      fd, c->mapoff);
+        __mprotect((void*)l->l_addr + c->mapstart, c->mapend - c->mapstart, PROT_READ | PROT_WRITE);
+        if(c_res == MAP_FAILED) {
+          return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
+        }
+        memcpy((void*)l->l_addr + c->mapstart, c_res, c->mapend - c->mapstart);
+        if (__mprotect((void*)l->l_addr + c->mapstart, c->mapend - c->mapstart, c->prot))
+          return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
+      }
+        //void* c_res = __mmap (NULL,
+      //                c->mapend - c->mapstart, c->prot,
+      //                MAP_COPY|MAP_FILE,
+      //                fd, c->mapoff);
+      //  memcpy(dest + c->mapstart, c_res, c->mapend - c->mapstart);
+      //  _
+      //  l->l_addr + c->mapstart
+      //}
+      //    /* Map the segment contents from the file.  */
+      //    && (__mmap ((void *) (l->l_addr + c->mapstart),
+      //                c->mapend - c->mapstart, c->prot,
+      //                MAP_FIXED|MAP_COPY|MAP_FILE,
+      //                fd, c->mapoff)
+      //        == MAP_FAILED))
 
     postmap:
+       _dl_debug_printf("1\n");
+
       _dl_postprocess_loadcmd (l, header, c);
+       _dl_debug_printf("2\n");
 
       if (c->allocend > c->dataend)
         {
@@ -137,11 +188,12 @@ _dl_map_segments (struct link_map *l, int fd,
           if (zeroend > zeropage)
             {
               /* Map the remaining zero pages in from the zero fill FD.  */
-              caddr_t mapat;
-              mapat = __mmap ((caddr_t) zeropage, zeroend - zeropage,
-                              c->prot, MAP_ANON|MAP_PRIVATE|MAP_FIXED,
-                              -1, 0);
-              if (__glibc_unlikely (mapat == MAP_FAILED))
+              ret = __mprotect((caddr_t) zeropage, zeroend - zeropage, PROT_READ|PROT_WRITE);
+              if (__glibc_unlikely (ret))
+                return DL_MAP_SEGMENTS_ERROR_MAP_ZERO_FILL;
+              memset((caddr_t) zeropage, 0, zeroend - zeropage);
+              ret = __mprotect((caddr_t) zeropage, zeroend - zeropage, c->prot);
+              if (__glibc_unlikely (ret))
                 return DL_MAP_SEGMENTS_ERROR_MAP_ZERO_FILL;
             }
         }
@@ -152,6 +204,7 @@ _dl_map_segments (struct link_map *l, int fd,
   /* Notify ELF_PREFERRED_ADDRESS that we have to load this one
      fixed.  */
   ELF_FIXED_ADDRESS (loader, c->mapstart);
+  _dl_debug_printf("return\n");
 
   return NULL;
 }
