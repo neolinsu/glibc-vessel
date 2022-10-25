@@ -27,6 +27,138 @@
    other use of those parts of the address space).  */
 
 
+#ifndef VESSEL_RTDL
+static __always_inline const char *
+_dl_map_segments (struct link_map *l, int fd,
+                  const ElfW(Ehdr) *header, int type,
+                  const struct loadcmd loadcmds[], size_t nloadcmds,
+                  const size_t maplength, bool has_holes,
+                  struct link_map *loader)
+{
+  const struct loadcmd *c = loadcmds;
+
+  if (__glibc_likely (type == ET_DYN))
+    {
+      /* This is a position-independent shared object.  We can let the
+         kernel map it anywhere it likes, but we must have space for all
+         the segments in their specified positions relative to the first.
+         So we map the first segment without MAP_FIXED, but with its
+         extent increased to cover all the segments.  Then we remove
+         access from excess portion, and there is known sufficient space
+         there to remap from the later segments.
+
+         As a refinement, sometimes we have an address that we would
+         prefer to map such objects at; but this is only a preference,
+         the OS can do whatever it likes. */
+      ElfW(Addr) mappref
+        = (ELF_PREFERRED_ADDRESS (loader, maplength,
+                                  c->mapstart & GLRO(dl_use_load_bias))
+           - MAP_BASE_ADDR (l));
+
+      /* Remember which part of the address space this object uses.  */
+      l->l_map_start = (ElfW(Addr)) __mmap ((void *) mappref, maplength,
+                                            c->prot,
+                                            MAP_COPY|MAP_FILE,
+                                            fd, c->mapoff);
+      if (__glibc_unlikely ((void *) l->l_map_start == MAP_FAILED))
+        return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
+
+      l->l_map_end = l->l_map_start + maplength;
+      l->l_addr = l->l_map_start - c->mapstart;
+
+      if (has_holes)
+        {
+          /* Change protection on the excess portion to disallow all access;
+             the portions we do not remap later will be inaccessible as if
+             unallocated.  Then jump into the normal segment-mapping loop to
+             handle the portion of the segment past the end of the file
+             mapping.  */
+          if (__glibc_unlikely
+              (__mprotect ((caddr_t) (l->l_addr + c->mapend),
+                           loadcmds[nloadcmds - 1].mapstart - c->mapend,
+                           PROT_NONE) < 0))
+            return DL_MAP_SEGMENTS_ERROR_MPROTECT;
+        }
+
+      l->l_contiguous = 1;
+
+      goto postmap;
+    }
+
+  /* Remember which part of the address space this object uses.  */
+  l->l_map_start = c->mapstart + l->l_addr;
+  l->l_map_end = l->l_map_start + maplength;
+  l->l_contiguous = !has_holes;
+
+  while (c < &loadcmds[nloadcmds])
+    {
+      if (c->mapend > c->mapstart
+          /* Map the segment contents from the file.  */
+          && (__mmap ((void *) (l->l_addr + c->mapstart),
+                      c->mapend - c->mapstart, c->prot,
+                      MAP_FIXED|MAP_COPY|MAP_FILE,
+                      fd, c->mapoff)
+              == MAP_FAILED))
+        return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
+
+    postmap:
+      _dl_postprocess_loadcmd (l, header, c);
+
+      if (c->allocend > c->dataend)
+        {
+          /* Extra zero pages should appear at the end of this segment,
+             after the data mapped from the file.   */
+          ElfW(Addr) zero, zeroend, zeropage;
+
+          zero = l->l_addr + c->dataend;
+          zeroend = l->l_addr + c->allocend;
+          zeropage = ((zero + GLRO(dl_pagesize) - 1)
+                      & ~(GLRO(dl_pagesize) - 1));
+
+          if (zeroend < zeropage)
+            /* All the extra data is in the last page of the segment.
+               We can just zero it.  */
+            zeropage = zeroend;
+
+          if (zeropage > zero)
+            {
+              /* Zero the final part of the last page of the segment.  */
+              if (__glibc_unlikely ((c->prot & PROT_WRITE) == 0))
+                {
+                  /* Dag nab it.  */
+                  if (__mprotect ((caddr_t) (zero
+                                             & ~(GLRO(dl_pagesize) - 1)),
+                                  GLRO(dl_pagesize), c->prot|PROT_WRITE) < 0)
+                    return DL_MAP_SEGMENTS_ERROR_MPROTECT;
+                }
+              memset ((void *) zero, '\0', zeropage - zero);
+              if (__glibc_unlikely ((c->prot & PROT_WRITE) == 0))
+                __mprotect ((caddr_t) (zero & ~(GLRO(dl_pagesize) - 1)),
+                            GLRO(dl_pagesize), c->prot);
+            }
+
+          if (zeroend > zeropage)
+            {
+              /* Map the remaining zero pages in from the zero fill FD.  */
+              caddr_t mapat;
+              mapat = __mmap ((caddr_t) zeropage, zeroend - zeropage,
+                              c->prot, MAP_ANON|MAP_PRIVATE|MAP_FIXED,
+                              -1, 0);
+              if (__glibc_unlikely (mapat == MAP_FAILED))
+                return DL_MAP_SEGMENTS_ERROR_MAP_ZERO_FILL;
+            }
+        }
+
+      ++c;
+    }
+
+  /* Notify ELF_PREFERRED_ADDRESS that we have to load this one
+     fixed.  */
+  ELF_FIXED_ADDRESS (loader, c->mapstart);
+
+  return NULL;
+}
+#else
 static __always_inline const char *
 _dl_map_segments (struct link_map *l, int fd,
                   const ElfW(Ehdr) *header, int type,
@@ -59,9 +191,13 @@ _dl_map_segments (struct link_map *l, int fd,
       /* Remember which part of the address space this object uses.  */
       void * res = __mmap ((void*)mappref, maplength, PROT_READ, MAP_COPY|MAP_FILE, fd, c->mapoff);
       v_aligned_alloc_t v_aligned_alloc = (v_aligned_alloc_t) vops->aligned_alloc;
-    
+      _dl_debug_printf("Check!\n");
+      struct __stat64_t64 st;
+      __fstat64_time64(fd, &st);
+      size_t f_size = st.st_size;
       void * dest = v_aligned_alloc(VESSEL_ALIGN_SIZE, VESSEL_UPPER_ALIGN(maplength));
-      memcpy(dest, res, maplength);
+      _dl_debug_printf("Check!\n");
+      memcpy(dest, res, f_size);
       __munmap(res, maplength);
 
       if(__mprotect(dest, VESSEL_UPPER_ALIGN(maplength), c->prot)) {
@@ -192,3 +328,4 @@ _dl_map_segments (struct link_map *l, int fd,
 
   return NULL;
 }
+#endif

@@ -542,6 +542,7 @@ _dl_start_final (void *arg, struct dl_start_final_info *info)
       rtld_timer_stop (&rtld_total_time, start_time);
       print_statistics (RTLD_TIMING_REF(rtld_total_time));
     }
+  _dl_debug_printf("Check!\n");
 
   return start_addr;
 }
@@ -2547,7 +2548,7 @@ dl_main (const ElfW(Phdr) *phdr,
   _dl_unload_cache ();
 #endif
   // MPK
-  erim_switch_to_untrusted();
+  // 
   /* Once we return, _dl_sysdep_start will invoke
      the DT_INIT functions and then *USER_ENTRY.  */
 }

@@ -2,6 +2,7 @@
 #ifndef _RTLD_VESSEL_H
 #define _RTLD_VESSEL_H
 
+#ifdef VESSEL_RTDL
 #define VESSEL_ALIGN_SIZE  4096
 #define VESSEL_UPPER_ALIGN(size)   (((size) + VESSEL_ALIGN_SIZE - 1) & (~(VESSEL_ALIGN_SIZE - 1)))
 
@@ -34,4 +35,5 @@ static __always_inline uint32_t _rdpid_safe(void)
 static __always_inline minimal_ops_t* vessel_get_ops(void) {
     return ((minimal_ops_map_t*) vessel_minimal_ops_map_ptr)->map[_rdpid_safe()];
 };
+#endif
 #endif //_RTLD_VESSEL_H
