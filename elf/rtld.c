@@ -74,6 +74,42 @@
 # define RTLD_TIMING_SET(var, value) (var) = (value)
 # define RTLD_TIMING_REF(var)        &(var)
 
+void** vessel_cpupkrus_ptr = (void**) 0x8d06a000; // TODO
+const void* vessel_minimal_ops_map_ptr = (void*) 0x8d082018;
+static __always_inline uint32_t _rdpid_safe(void)
+{
+	uint32_t a, d, c;
+	asm volatile("rdtscp" : "=a" (a), "=d" (d), "=c" (c));
+	return c;
+};
+
+#define __wrpkru_percpu(MEM_PTR) \
+  do { \
+  __label__ vessel_start; \
+  vessel_start: \
+    asm goto ( \
+      "xor %%rcx, %%rcx\n\t" \
+      "rdtscp\n\t" \
+      "movq %0, %%rax\n\t" \
+      "movq (%%rax, %%rcx, 8), %%rax\n\t" \
+      ".byte 0x0f,0x01,0xef\n\t" \
+      "xor %%rcx, %%rcx\n\t" \
+      "rdtscp\n\t" \
+      "movq %0, %%rax\n\t" \
+      "movq (%%rax, %%rcx, 8), %%rcx\n\t" \
+      "RDPKRU\n\t" \
+      "cmp %%ecx, %%eax\n\t" \
+      "jne %l1\n\t" \
+      : : "m" (MEM_PTR) \
+      : "rax", "rcx", "rdx": vessel_start \
+    ); \
+  } while(0)
+
+#define erim_switch_to_untrusted()                   \
+  do {                                               \
+    __wrpkru_percpu(vessel_cpupkrus_ptr);            \
+  } while(0)
+
 static inline void
 rtld_timer_start (hp_timing_t *var)
 {
@@ -2510,7 +2546,8 @@ dl_main (const ElfW(Phdr) *phdr,
   /* We must munmap() the cache file.  */
   _dl_unload_cache ();
 #endif
-
+  // MPK
+  erim_switch_to_untrusted();
   /* Once we return, _dl_sysdep_start will invoke
      the DT_INIT functions and then *USER_ENTRY.  */
 }

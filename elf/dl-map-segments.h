@@ -17,6 +17,7 @@
    <https://www.gnu.org/licenses/>.  */
 
 #include <dl-load.h>
+#include <rtld-vessel.h>
 
 /* This implementation assumes (as does the corresponding implementation
    of _dl_unmap_segments, in dl-unmap-segments.h) that shared objects
@@ -25,18 +26,6 @@
    pages inside the gaps with PROT_NONE mappings rather than permitting
    other use of those parts of the address space).  */
 
-typedef void*(*malloc_t)(size_t alignment, size_t size);
-void** vessel_malloc_ptr = (void**) 0x8d042000;
-
-static __always_inline uint32_t _rdpid_safe(void)
-{
-	uint32_t a, d, c;
-	asm volatile("rdtscp" : "=a" (a), "=d" (d), "=c" (c));
-	return c;
-};
-
-#define VESSEL_ALIGN_SIZE  4096
-#define VESSEL_UPPER_ALIGN(size)   (((size) + VESSEL_ALIGN_SIZE - 1) & (~(VESSEL_ALIGN_SIZE - 1)))
 
 static __always_inline const char *
 _dl_map_segments (struct link_map *l, int fd,
@@ -46,6 +35,8 @@ _dl_map_segments (struct link_map *l, int fd,
                   struct link_map *loader)
 {
   const struct loadcmd *c = loadcmds;
+  struct minimal_ops *vops = NULL;
+  vops = vessel_get_ops();
   int ret;
   if (__glibc_likely (type == ET_DYN))
     {
@@ -67,12 +58,12 @@ _dl_map_segments (struct link_map *l, int fd,
 
       /* Remember which part of the address space this object uses.  */
       void * res = __mmap ((void*)mappref, maplength, PROT_READ, MAP_COPY|MAP_FILE, fd, c->mapoff);
-      
-      malloc_t my_malloc = (malloc_t) *(vessel_malloc_ptr + _rdpid_safe());
-      
-      void * dest = my_malloc(VESSEL_ALIGN_SIZE, VESSEL_UPPER_ALIGN(maplength));
+      v_aligned_alloc_t v_aligned_alloc = (v_aligned_alloc_t) vops->aligned_alloc;
+    
+      void * dest = v_aligned_alloc(VESSEL_ALIGN_SIZE, VESSEL_UPPER_ALIGN(maplength));
       memcpy(dest, res, maplength);
-      
+      __munmap(res, maplength);
+
       if(__mprotect(dest, VESSEL_UPPER_ALIGN(maplength), c->prot)) {
         _dl_debug_printf("Fail to mprotect for %d\n", errno);
       }
