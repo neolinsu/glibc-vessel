@@ -544,7 +544,7 @@ _dl_start (void *arg)
 #ifndef ELF_MACHINE_START_ADDRESS
 # define ELF_MACHINE_START_ADDRESS(map, start) (start)
 #endif
-
+    _dl_debug_printf("Check here!\n");
     return ELF_MACHINE_START_ADDRESS (GL(dl_ns)[LM_ID_BASE]._ns_loaded, entry);
   }
 }
