@@ -75,7 +75,7 @@
 # define RTLD_TIMING_REF(var)        &(var)
 
 void** vessel_cpupkrus_ptr = (void**) 0x8d06a000; // TODO
-const void* vessel_minimal_ops_map_ptr = (void*) 0x8d082018;
+
 static __always_inline uint32_t _rdpid_safe(void)
 {
 	uint32_t a, d, c;

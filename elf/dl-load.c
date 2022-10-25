@@ -88,6 +88,9 @@ struct filebuf
 #define STRING(x) __STRING (x)
 
 
+const void* vessel_minimal_ops_map_ptr = (void*) 0x8d082018;
+
+
 int __stack_prot attribute_hidden attribute_relro
 #if _STACK_GROWS_DOWN && defined PROT_GROWSDOWN
   = PROT_GROWSDOWN;
