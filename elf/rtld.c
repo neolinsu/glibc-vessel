@@ -48,6 +48,58 @@
 
 #include <assert.h>
 
+#ifdef VESSEL_RTDL
+void* vessel_cpupkrus_ptr = (void*)0x8d06a000;
+static __always_inline uint32_t _rdpid_safe(void)
+{
+	uint32_t a, d, c;
+	asm volatile("rdtscp" : "=a" (a), "=d" (d), "=c" (c));
+	return c;
+};
+
+#define __wrpkru_percpu() \
+  do { \
+  __label__ vessel_start; \
+  vessel_start: \
+    asm goto ( \
+      "xor %%rcx, %%rcx\n\t" \
+      "rdtscp\n\t" \
+      "movabsq $0x8d06a000, %%rax\n\t" \
+      "mov (%%rax, %%rcx, 4), %%eax\n\t" \
+      "xor %%ecx, %%ecx\n\t" \
+      "xor %%edx, %%edx\n\t" \
+      ".byte 0x0f,0x01,0xef\n\t" \
+      "xor %%rcx, %%rcx\n\t" \
+      "rdtscp\n\t" \
+      "movabsq $0x8d06a000, %%rax\n\t" \
+      "mov (%%rax, %%rcx, 4), %%ebx\n\t" \
+      "xor %%ecx, %%ecx\n\t" \
+      "RDPKRU\n\t" \
+      "cmp %%ebx, %%eax\n\t" \
+      "jne %l1\n\t" \
+      ::"r"(vessel_cpupkrus_ptr):"rax", "rcx", "rdx", "rbx", "memory": vessel_start \
+    ); \
+  } while(0)
+
+#define get_pkru(MEM_PTR, RES) \
+  do { \
+    asm ( \
+      "xor %%rcx, %%rcx\n\t" \
+      "rdtscp\n\t" \
+      "movabsq $0x8d06a000, %%rax\n\t" \
+      "mov (%%rax, %%rcx, 4), %0\n\t" \
+      : "=r" (RES) : "m" (MEM_PTR) \
+      : "rax", "rcx" \
+    ); \
+  } while(0)
+
+#define erim_switch_to_untrusted()                   \
+  do {                                               \
+    __wrpkru_percpu();            \
+  } while(0)
+
+#endif
+
 /* Only enables rtld profiling for architectures which provides non generic
    hp-timing support.  The generic support requires either syscall
    (clock_gettime), which will incur in extra overhead on loading time.
@@ -2361,7 +2413,14 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
   /* We must munmap() the cache file.  */
   _dl_unload_cache ();
 #endif
+  unsigned int res = 0;
+  _dl_debug_printf("PKRU: %x\n", *((unsigned int *)vessel_cpupkrus_ptr + 1));
+  get_pkru(vessel_cpupkrus_ptr, res);
 
+  _dl_debug_printf("PKRU: %x\n", res);
+
+  erim_switch_to_untrusted();
+  _dl_debug_printf("!!!!!\n");
   /* Once we return, _dl_sysdep_start will invoke
      the DT_INIT functions and then *USER_ENTRY.  */
 }
