@@ -90,6 +90,8 @@ malloc (size_t n)
   return alloc_last_block;
 #else
   if (vops==NULL) {
+    _dl_debug_printf("Malloc Check!!!\n");
+    
     vops = vessel_get_ops();
   }
   return ((v_malloc_t)vops->malloc)(n);
@@ -116,6 +118,7 @@ calloc (size_t nmemb, size_t size)
   return malloc (bytes);
 #else
   if (vops==NULL) {
+  _dl_debug_printf("Malloc Check!!!\n");
     vops = vessel_get_ops();
   }
   return ((v_calloc_t)vops->calloc)(nmemb, size);
@@ -137,6 +140,7 @@ free (void *ptr)
     }
 #else
   if (vops==NULL) {
+  _dl_debug_printf("Malloc Check!!!\n");
     vops = vessel_get_ops();
   }
   return ((v_free_t)vops->free)(ptr);
@@ -157,6 +161,7 @@ realloc (void *ptr, size_t n)
   return new != ptr ? memcpy (new, ptr, old_size) : new;
 #else
   if (vops==NULL) {
+  _dl_debug_printf("Malloc Check!!!\n");
     vops = vessel_get_ops();
   }
   return ((v_realloc_t)vops->realloc)(ptr, n);

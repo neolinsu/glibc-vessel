@@ -29,6 +29,7 @@
 static __always_inline void
 _dl_unmap_segments (struct link_map *l)
 {
+
   __munmap ((void *) l->l_map_start, l->l_map_end - l->l_map_start);
 }
 

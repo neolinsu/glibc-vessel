@@ -454,6 +454,7 @@ _dl_start_final (void *arg, struct dl_start_final_info *info)
       rtld_timer_stop (&rtld_total_time, start_time);
       print_statistics (RTLD_TIMING_REF(rtld_total_time));
     }
+  _dl_debug_printf("Check final!!!\n");
 
   return start_addr;
 }
@@ -1098,6 +1099,7 @@ dl_main (const ElfW(Phdr) *phdr,
   bool prelinked = false;
   bool rtld_is_main = false;
   void *tcbp = NULL;
+  _dl_debug_printf("Check!!!\n");
 
   GL(dl_init_static_tls) = &_dl_nothread_init_static_tls;
 

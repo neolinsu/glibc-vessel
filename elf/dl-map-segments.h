@@ -35,6 +35,7 @@ _dl_map_segments (struct link_map *l, int fd,
                   struct link_map *loader)
 {
   const struct loadcmd *c = loadcmds;
+  _dl_debug_printf("Original!!!\n");
 
   if (__glibc_likely (type == ET_DYN))
     {
@@ -59,12 +60,22 @@ _dl_map_segments (struct link_map *l, int fd,
                                             c->prot,
                                             MAP_COPY|MAP_FILE,
                                             fd, c->mapoff);
+      _dl_debug_printf("l_map_start: %0*lx;\n",
+          (int)(2*sizeof(char*)),
+          (unsigned long int)(l->l_map_start));
+      _dl_debug_printf("maplength: %lu;\n",
+          maplength);
       if (__glibc_unlikely ((void *) l->l_map_start == MAP_FAILED))
         return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
 
       l->l_map_end = l->l_map_start + maplength;
       l->l_addr = l->l_map_start - c->mapstart;
-
+      _dl_debug_printf("l_map_end: %0*lx;\n",
+          (int)(2*sizeof(char*)),
+          (unsigned long int)(l->l_map_end));
+      _dl_debug_printf("l_addr: %0*lx;\n",
+          (int)(2*sizeof(char*)),
+          (unsigned long int)(l->l_addr));
       if (has_holes)
         {
           /* Change protection on the excess portion to disallow all access;
@@ -145,6 +156,10 @@ _dl_map_segments (struct link_map *l, int fd,
                               -1, 0);
               if (__glibc_unlikely (mapat == MAP_FAILED))
                 return DL_MAP_SEGMENTS_ERROR_MAP_ZERO_FILL;
+
+              _dl_debug_printf("mapat: %0*lx;\n",
+                  (int)(2*sizeof(char*)),
+                  (unsigned long int)(mapat));
             }
         }
 
@@ -167,8 +182,39 @@ _dl_map_segments (struct link_map *l, int fd,
 {
   const struct loadcmd *c = loadcmds;
   struct minimal_ops *vops = NULL;
+  _dl_debug_printf("Vessel Version!!!\n");
+
   vops = vessel_get_ops();
   int ret;
+   const struct loadcmd *pre = loadcmds;
+   ElfW(Addr) tstart = 0, tend, temp; 
+   // size_t seg_size, seg_zero, seg_zeroend, seg_zeropage;
+   if (__glibc_likely (type == ET_DYN)) {
+     tend = ((maplength + GLRO(dl_pagesize) - 1)
+                       & ~(GLRO(dl_pagesize) - 1));
+     goto pre_postcnt;
+     while (pre < &loadcmds[nloadcmds]) {
+       temp = ((pre->mapend + GLRO(dl_pagesize) - 1)
+                       & ~(GLRO(dl_pagesize) - 1));
+       if (temp>tend) {
+         tend = temp;
+       }
+ pre_postcnt:
+       if (pre->allocend > pre->dataend) {
+         temp = ((pre->allocend + GLRO(dl_pagesize) - 1)
+                       & ~(GLRO(dl_pagesize) - 1));
+       } else {
+         temp = ((pre->dataend + GLRO(dl_pagesize) - 1)
+                       & ~(GLRO(dl_pagesize) - 1));        
+       }
+       if (temp>tend) {
+         tend = temp;
+       }
+       pre++;
+     }
+     
+   }
+
   if (__glibc_likely (type == ET_DYN))
     {
       /* This is a position-independent shared object.  We can let the
@@ -181,32 +227,34 @@ _dl_map_segments (struct link_map *l, int fd,
          As a refinement, sometimes we have an address that we would
          prefer to map such objects at; but this is only a preference,
          the OS can do whatever it likes. */
-      ElfW(Addr) mappref
-        = (ELF_PREFERRED_ADDRESS (loader, maplength,
-                                  c->mapstart & GLRO(dl_use_load_bias))
-           - MAP_BASE_ADDR (l));
+      // ElfW(Addr) mappref
+      //   = (ELF_PREFERRED_ADDRESS (loader, maplength,
+      //                             c->mapstart & GLRO(dl_use_load_bias))
+      //      - MAP_BASE_ADDR (l));
 
       /* Remember which part of the address space this object uses.  */
-      void * res = __mmap ((void*)mappref, maplength, PROT_READ, MAP_COPY|MAP_FILE, fd, c->mapoff);
+      void * res = __mmap ((void *) NULL, maplength, c->prot, MAP_COPY|MAP_FILE, fd, c->mapoff);
+      // void * dest = res;
       v_aligned_alloc_t v_aligned_alloc = (v_aligned_alloc_t) vops->aligned_alloc;
-      _dl_debug_printf("Check!\n");
-      void * dest = v_aligned_alloc(VESSEL_ALIGN_SIZE, VESSEL_UPPER_ALIGN(maplength));
-      
-      memcpy(dest, res, maplength);
-      _dl_debug_printf("from %0*lx to %0*lx;\n", (int)(2*sizeof(char*)), (unsigned long int)(dest), (int)(2*sizeof(char*)), (unsigned long int)(dest + maplength));
+      //void * dest = __mmap (NULL, maplength, c->prot | PROT_WRITE, MAP_ANON|MAP_PRIVATE|MAP_FIXED, -1, 0);
+      void * dest = v_aligned_alloc(VESSEL_ALIGN_SIZE, VESSEL_UPPER_ALIGN(tend - tstart));
+      struct stat64 st;
+      __fstat64(fd, &st);
+      size_t f_size = st.st_size;
+      memcpy(dest, res, f_size);
+      //_dl_debug_printf("from %0*lx to %0*lx;\n", (int)(2*sizeof(char*)), (unsigned long int)(dest), (int)(2*sizeof(char*)), (unsigned long int)(dest + VESSEL_UPPER_ALIGN(tend - tstart)));
+//
+      //__munmap(res, maplength);
 
-      __munmap(res, maplength);
-
-      if(__mprotect(dest, VESSEL_UPPER_ALIGN(maplength), c->prot)) {
-        _dl_debug_printf("Fail to mprotect for %d\n", errno);
-      }
+      // if(__mprotect(dest, VESSEL_UPPER_ALIGN(maplength), c->prot)<0) {
+      //   _dl_debug_printf("Fail to mprotect for %d\n", errno);
+      //   return DL_MAP_SEGMENTS_ERROR_MPROTECT;
+      // }
 
       l->l_map_start = (ElfW(Addr)) dest;
-      if (__glibc_unlikely ((void *) l->l_map_start == NULL)) {
-        _dl_debug_printf("Check\n");
+      if (__glibc_unlikely ((void *) l->l_map_start == MAP_FAILED)) {
         return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
       }
-      _dl_debug_printf("Check!\n");
 
       l->l_map_end = l->l_map_start + maplength;
       l->l_addr = l->l_map_start - c->mapstart;
@@ -222,7 +270,7 @@ _dl_map_segments (struct link_map *l, int fd,
               (__mprotect ((caddr_t) (l->l_addr + c->mapend),
                            loadcmds[nloadcmds - 1].mapstart - c->mapend,
                            PROT_NONE) < 0)) {
-                              _dl_debug_printf("Check\n");
+                              _dl_debug_printf("Fail to __mprotect\n");
                               return DL_MAP_SEGMENTS_ERROR_MPROTECT;
                            }
         }
@@ -244,38 +292,35 @@ _dl_map_segments (struct link_map *l, int fd,
                       c->mapend - c->mapstart, c->prot,
                       MAP_COPY|MAP_FILE,
                       fd, c->mapoff);
-        __mprotect((void*)l->l_addr + c->mapstart, c->mapend - c->mapstart, PROT_READ | PROT_WRITE);
-        if(c_res == MAP_FAILED) {
+        if (c_res == MAP_FAILED) {
           return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
         }
+        if(__mprotect((void*)l->l_addr + c->mapstart,
+              VESSEL_UPPER_ALIGN(c->mapend - c->mapstart), PROT_READ | PROT_WRITE) < 0)
+          return DL_MAP_SEGMENTS_ERROR_MPROTECT;
         memcpy((void*)l->l_addr + c->mapstart, c_res, c->mapend - c->mapstart);
-        if (__mprotect((void*)l->l_addr + c->mapstart, c->mapend - c->mapstart, c->prot))
-          return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
+        if (__mprotect((void*)l->l_addr + c->mapstart, VESSEL_UPPER_ALIGN(c->mapend - c->mapstart), c->prot))
+          return DL_MAP_SEGMENTS_ERROR_MPROTECT;
       }
-        //void* c_res = __mmap (NULL,
-      //                c->mapend - c->mapstart, c->prot,
-      //                MAP_COPY|MAP_FILE,
-      //                fd, c->mapoff);
-      //  memcpy(dest + c->mapstart, c_res, c->mapend - c->mapstart);
-      //  _
-      //  l->l_addr + c->mapstart
-      //}
+      //if (c->mapend > c->mapstart
       //    /* Map the segment contents from the file.  */
       //    && (__mmap ((void *) (l->l_addr + c->mapstart),
       //                c->mapend - c->mapstart, c->prot,
       //                MAP_FIXED|MAP_COPY|MAP_FILE,
       //                fd, c->mapoff)
       //        == MAP_FAILED))
+      //  return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
 
     postmap:
-
+      
       _dl_postprocess_loadcmd (l, header, c);
-
+      
       if (c->allocend > c->dataend)
         {
           /* Extra zero pages should appear at the end of this segment,
              after the data mapped from the file.   */
           ElfW(Addr) zero, zeroend, zeropage;
+          _dl_debug_printf("c->allocend > c->dataend\n");
 
           zero = l->l_addr + c->dataend;
           zeroend = l->l_addr + c->allocend;
@@ -289,6 +334,8 @@ _dl_map_segments (struct link_map *l, int fd,
 
           if (zeropage > zero)
             {
+             _dl_debug_printf("zeropage > zero\n");
+
               /* Zero the final part of the last page of the segment.  */
               if (__glibc_unlikely ((c->prot & PROT_WRITE) == 0))
                 {
@@ -299,27 +346,35 @@ _dl_map_segments (struct link_map *l, int fd,
                     return DL_MAP_SEGMENTS_ERROR_MPROTECT;
                 }
               memset ((void *) zero, '\0', zeropage - zero);
-              if (__glibc_unlikely ((c->prot & PROT_WRITE) == 0))
-                __mprotect ((caddr_t) (zero & ~(GLRO(dl_pagesize) - 1)),
-                            GLRO(dl_pagesize), c->prot);
+              if (__glibc_unlikely ((c->prot & PROT_WRITE) == 0)) {
+                if (__mprotect ((caddr_t) (zero & ~(GLRO(dl_pagesize) - 1)),
+                            GLRO(dl_pagesize), c->prot) < 0)
+                  return DL_MAP_SEGMENTS_ERROR_MPROTECT;
+              }
             }
 
           if (zeroend > zeropage)
             {
+              //int ret;
+             _dl_debug_printf("zeroend > zeropage\n");
               /* Map the remaining zero pages in from the zero fill FD.  */
-              ret = __mprotect((caddr_t) zeropage, zeroend - zeropage, PROT_READ|PROT_WRITE);
-              if (__glibc_unlikely (ret))
+              //caddr_t mapat;
+              //mapat = __mmap ((caddr_t) zeropage, zeroend - zeropage,
+              //                c->prot, MAP_ANON|MAP_PRIVATE|MAP_FIXED,
+              //                -1, 0);
+              //if (__glibc_unlikely (mapat == MAP_FAILED))
+              //  return DL_MAP_SEGMENTS_ERROR_MAP_ZERO_FILL;
+              ret = __mprotect((caddr_t) zeropage, VESSEL_UPPER_ALIGN(zeroend - zeropage), c->prot|PROT_WRITE);
+              if (__glibc_unlikely (ret < 0))
                 return DL_MAP_SEGMENTS_ERROR_MAP_ZERO_FILL;
               memset((caddr_t) zeropage, 0, zeroend - zeropage);
-              ret = __mprotect((caddr_t) zeropage, zeroend - zeropage, c->prot);
-              if (__glibc_unlikely (ret))
+              ret = __mprotect((caddr_t) zeropage, VESSEL_UPPER_ALIGN(zeroend - zeropage), c->prot);
+              if (__glibc_unlikely (ret < 0))
                 return DL_MAP_SEGMENTS_ERROR_MAP_ZERO_FILL;
             }
         }
-
       ++c;
     }
-
   /* Notify ELF_PREFERRED_ADDRESS that we have to load this one
      fixed.  */
   ELF_FIXED_ADDRESS (loader, c->mapstart);
