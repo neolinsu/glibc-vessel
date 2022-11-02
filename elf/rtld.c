@@ -50,6 +50,7 @@
 
 #ifdef VESSEL_RTDL
 void* vessel_cpupkrus_ptr = (void*)0x8d06a000;
+void* vessel_reg_tls_ops_func = (void*)0x8d092000;
 static __always_inline uint32_t _rdpid_safe(void)
 {
 	uint32_t a, d, c;
@@ -98,6 +99,18 @@ static __always_inline uint32_t _rdpid_safe(void)
     __wrpkru_percpu();            \
   } while(0)
 
+
+// _dl_allocate_tls_storage
+// _dl_allocate_tls_init
+typedef void*(*allocate_tls_storage_t)(void); 
+typedef void*(*tls_init_t)(void*); 
+typedef void(*deallocate_tls_t)(void*, bool);
+struct tls_ops {
+    allocate_tls_storage_t allocate_tls_storage;
+    tls_init_t tls_init;
+    deallocate_tls_t deallocate_tls;
+};
+typedef void(*register_tls_ops_func_t)(struct tls_ops*);
 #endif
 
 /* Only enables rtld profiling for architectures which provides non generic
@@ -1675,6 +1688,8 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
     {
       /* Since we start using the auditing DSOs right away we need to
 	 initialize the data structures now.  */
+      _dl_debug_printf("Before tls!!!\n");
+      
       tcbp = init_tls ();
 
       /* Initialize security features.  We need to do it this early
@@ -1926,6 +1941,15 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
      an old kernel that can't perform TLS_INIT_TP, even if no TLS is ever
      used.  Trying to do it lazily is too hairy to try when there could be
      multiple threads (from a non-TLS-using libpthread).  */
+#ifdef VESSEL_RTDL
+  register_tls_ops_func_t reg_tls_ops_func = *((register_tls_ops_func_t*)vessel_reg_tls_ops_func);
+  struct tls_ops tls_ops = {
+    .allocate_tls_storage=_dl_allocate_tls_storage,
+    .tls_init=_dl_allocate_tls_init,
+    .deallocate_tls = _dl_deallocate_tls
+  };
+  reg_tls_ops_func(&tls_ops);
+#endif
   bool was_tls_init_tp_called = tls_init_tp_called;
   if (tcbp == NULL)
     tcbp = init_tls ();
@@ -2414,6 +2438,7 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
   _dl_unload_cache ();
 #endif
   unsigned int res = 0;
+#ifdef VESSEL_RTDL
   _dl_debug_printf("PKRU: %x\n", *((unsigned int *)vessel_cpupkrus_ptr + 1));
   get_pkru(vessel_cpupkrus_ptr, res);
 
@@ -2421,6 +2446,7 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
 
   erim_switch_to_untrusted();
   _dl_debug_printf("!!!!!\n");
+#endif
   /* Once we return, _dl_sysdep_start will invoke
      the DT_INIT functions and then *USER_ENTRY.  */
 }

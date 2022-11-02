@@ -94,7 +94,11 @@ malloc (size_t n)
     
     vops = vessel_get_ops();
   }
-  return ((v_malloc_t)vops->malloc)(n);
+  _dl_debug_printf("Malloc: %lu\n", n);
+  void *res = ((v_malloc_t)vops->malloc)(n);
+  _dl_debug_printf("Malloc Done!\n");
+
+  return res;
 #endif
 }
 
@@ -121,7 +125,12 @@ calloc (size_t nmemb, size_t size)
   _dl_debug_printf("Malloc Check!!!\n");
     vops = vessel_get_ops();
   }
-  return ((v_calloc_t)vops->calloc)(nmemb, size);
+  _dl_debug_printf("Calloc: %lu\n", size);
+  void* res = ((v_calloc_t)vops->calloc)(nmemb, size);
+  _dl_debug_printf("Calloc done.\n");
+
+  return res;
+
 #endif
 }
 
@@ -143,6 +152,8 @@ free (void *ptr)
   _dl_debug_printf("Malloc Check!!!\n");
     vops = vessel_get_ops();
   }
+  _dl_debug_printf("free Check!!!\n");
+
   return ((v_free_t)vops->free)(ptr);
 #endif
 }
