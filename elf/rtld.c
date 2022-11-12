@@ -50,7 +50,7 @@
 
 #ifdef VESSEL_RTDL
 void* vessel_cpupkrus_ptr = (void*)0x8d06a000;
-void* vessel_reg_tls_ops_func = (void*)0x8d092000;
+void* vessel_reg_tls_ops_func = (void*)0x8d232000;
 static __always_inline uint32_t _rdpid_safe(void)
 {
 	uint32_t a, d, c;
@@ -519,7 +519,7 @@ _dl_start_final (void *arg, struct dl_start_final_info *info)
       rtld_timer_stop (&rtld_total_time, start_time);
       print_statistics (RTLD_TIMING_REF(rtld_total_time));
     }
-  _dl_debug_printf("Check final!!!\n");
+  //_dl_debug_printf("Check final!!!\n");
 
   return start_addr;
 }
@@ -610,7 +610,7 @@ _dl_start (void *arg)
 #ifndef ELF_MACHINE_START_ADDRESS
 # define ELF_MACHINE_START_ADDRESS(map, start) (start)
 #endif
-    _dl_debug_printf("Check here!\n");
+    //_dl_debug_printf("Check here!\n");
     return ELF_MACHINE_START_ADDRESS (GL(dl_ns)[LM_ID_BASE]._ns_loaded, entry);
   }
 }
@@ -2366,10 +2366,12 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
      Note: thread-local variables must only be accessed after completing
      the next step.  */
   _dl_allocate_tls_init (tcbp);
+  //_dl_debug_printf("after _dl_allocate_tls_init.\n");
 
   /* And finally install it for the main thread.  */
   if (! tls_init_tp_called)
     {
+      //_dl_debug_printf("tls_init_tp_called.\n");
       const char *lossage = TLS_INIT_TP (tcbp);
       if (__glibc_unlikely (lossage != NULL))
 	_dl_fatal_printf ("cannot set up thread-local storage: %s\n",
@@ -2387,6 +2389,7 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
 	 We must do this after TLS initialization in case after this
 	 re-relocation, we might call a user-supplied function
 	 (e.g. calloc from _dl_relocate_object) that uses TLS data.  */
+  //_dl_debug_printf("! prelinked && rtld_multiple_ref\n");
 
       RTLD_TIMING_VAR (start);
       rtld_timer_start (&start);
@@ -2439,13 +2442,13 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
 #endif
   unsigned int res = 0;
 #ifdef VESSEL_RTDL
-  _dl_debug_printf("PKRU: %x\n", *((unsigned int *)vessel_cpupkrus_ptr + 1));
+  //_dl_debug_printf("PKRU: %x\n", *((unsigned int *)vessel_cpupkrus_ptr + 1));
   get_pkru(vessel_cpupkrus_ptr, res);
 
-  _dl_debug_printf("PKRU: %x\n", res);
+  //_dl_debug_printf("PKRU: %x\n", res);
 
   erim_switch_to_untrusted();
-  _dl_debug_printf("!!!!!\n");
+  //_dl_debug_printf("!!!!!\n");
 #endif
   /* Once we return, _dl_sysdep_start will invoke
      the DT_INIT functions and then *USER_ENTRY.  */

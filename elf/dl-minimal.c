@@ -89,14 +89,14 @@ malloc (size_t n)
   alloc_ptr += n;
   return alloc_last_block;
 #else
+  //_dl_debug_printf("Malloc!!!\n");
   if (vops==NULL) {
-    _dl_debug_printf("Malloc Check!!!\n");
-    
+    //_dl_debug_printf("Malloc Check!!!\n");
     vops = vessel_get_ops();
   }
-  _dl_debug_printf("Malloc: %lu\n", n);
+  //_dl_debug_printf("Malloc: %lu\n", n);
   void *res = ((v_malloc_t)vops->malloc)(n);
-  _dl_debug_printf("Malloc Done!\n");
+  //_dl_debug_printf("Malloc Done!\n");
 
   return res;
 #endif
@@ -122,12 +122,12 @@ calloc (size_t nmemb, size_t size)
   return malloc (bytes);
 #else
   if (vops==NULL) {
-  _dl_debug_printf("Malloc Check!!!\n");
+  //_dl_debug_printf("Malloc Check!!!\n");
     vops = vessel_get_ops();
   }
-  _dl_debug_printf("Calloc: %lu\n", size);
+  //_dl_debug_printf("Calloc: %lu\n", size);
   void* res = ((v_calloc_t)vops->calloc)(nmemb, size);
-  _dl_debug_printf("Calloc done.\n");
+  //_dl_debug_printf("Calloc done.\n");
 
   return res;
 
@@ -149,10 +149,10 @@ free (void *ptr)
     }
 #else
   if (vops==NULL) {
-  _dl_debug_printf("Malloc Check!!!\n");
+  //_dl_debug_printf("Malloc Check!!!\n");
     vops = vessel_get_ops();
   }
-  _dl_debug_printf("free Check!!!\n");
+  //_dl_debug_printf("free Check!!!\n");
 
   return ((v_free_t)vops->free)(ptr);
 #endif
@@ -172,7 +172,7 @@ realloc (void *ptr, size_t n)
   return new != ptr ? memcpy (new, ptr, old_size) : new;
 #else
   if (vops==NULL) {
-  _dl_debug_printf("Malloc Check!!!\n");
+  //_dl_debug_printf("Malloc Check!!!\n");
     vops = vessel_get_ops();
   }
   return ((v_realloc_t)vops->realloc)(ptr, n);

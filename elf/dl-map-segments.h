@@ -172,7 +172,7 @@ _dl_map_segments (struct link_map *l, int fd,
   _dl_debug_printf("Vessel Version!!!\n");
 
   vops = vessel_get_ops();
-  _dl_debug_printf("After vessel_get_ops\n");
+  //_dl_debug_printf("After vessel_get_ops\n");
 
   int ret;
    const struct loadcmd *pre = loadcmds;
@@ -203,7 +203,7 @@ _dl_map_segments (struct link_map *l, int fd,
      }
      
    }
-   _dl_debug_printf("After get count\n");
+   //_dl_debug_printf("After get count\n");
 
 
   if (__glibc_likely (type == ET_DYN))
@@ -225,14 +225,14 @@ _dl_map_segments (struct link_map *l, int fd,
 
       /* Remember which part of the address space this object uses.  */
       void * res = __mmap ((void *) NULL, maplength, c->prot, MAP_COPY|MAP_FILE, fd, c->mapoff);
-      _dl_debug_printf("After __mmap offset:%lu\n", c->mapoff);
+      //_dl_debug_printf("After __mmap offset:%lu\n", c->mapoff);
       
       // void * dest = res;
       v_aligned_alloc_t v_aligned_alloc = (v_aligned_alloc_t) vops->aligned_alloc;
-      _dl_debug_printf("After get v_aligned_alloc\n");
+      //_dl_debug_printf("After get v_aligned_alloc\n");
       //void * dest = __mmap (NULL, maplength, c->prot | PROT_WRITE, MAP_ANON|MAP_PRIVATE|MAP_FIXED, -1, 0);
       void * dest = v_aligned_alloc(VESSEL_ALIGN_SIZE, VESSEL_UPPER_ALIGN(tend - tstart));
-      _dl_debug_printf("After v_aligned_alloc size: %lu\n", VESSEL_UPPER_ALIGN(tend - tstart));
+      //_dl_debug_printf("After v_aligned_alloc size: %lu\n", VESSEL_UPPER_ALIGN(tend - tstart));
 
       //struct stat64 st;
       //__fstat64(fd, &st);
@@ -242,7 +242,7 @@ _dl_map_segments (struct link_map *l, int fd,
       //_dl_debug_printf("After fsize: %lu\n", st.st_size);
 
       memcpy(dest, res, c->dataend - c->mapstart);
-      _dl_debug_printf("After memcpy: %lu\n", c->dataend - c->mapstart);
+      //_dl_debug_printf("After memcpy: %lu\n", c->dataend - c->mapstart);
 
       __munmap(res, maplength);
 
@@ -276,7 +276,7 @@ _dl_map_segments (struct link_map *l, int fd,
         }
 
       l->l_contiguous = 1;
-      _dl_debug_printf("Before goto postmap\n");
+      //_dl_debug_printf("Before goto postmap\n");
 
       goto postmap;
     }
@@ -321,7 +321,7 @@ _dl_map_segments (struct link_map *l, int fd,
           /* Extra zero pages should appear at the end of this segment,
              after the data mapped from the file.   */
           ElfW(Addr) zero, zeroend, zeropage;
-          _dl_debug_printf("c->allocend > c->dataend\n");
+          //_dl_debug_printf("c->allocend > c->dataend\n");
 
           zero = l->l_addr + c->dataend;
           zeroend = l->l_addr + c->allocend;
@@ -335,7 +335,7 @@ _dl_map_segments (struct link_map *l, int fd,
 
           if (zeropage > zero)
             {
-             _dl_debug_printf("zeropage > zero\n");
+             //_dl_debug_printf("zeropage > zero\n");
 
               /* Zero the final part of the last page of the segment.  */
               if (__glibc_unlikely ((c->prot & PROT_WRITE) == 0))
@@ -347,7 +347,7 @@ _dl_map_segments (struct link_map *l, int fd,
                     return DL_MAP_SEGMENTS_ERROR_MPROTECT;
                 }
               memset ((void *) zero, '\0', zeropage - zero);
-             _dl_debug_printf("after memset: %lu\n", zeropage - zero);
+             //_dl_debug_printf("after memset: %lu\n", zeropage - zero);
               
               if (__glibc_unlikely ((c->prot & PROT_WRITE) == 0)) {
                 if (__mprotect ((caddr_t) (zero & ~(GLRO(dl_pagesize) - 1)),
@@ -359,7 +359,7 @@ _dl_map_segments (struct link_map *l, int fd,
           if (zeroend > zeropage)
             {
               //int ret;
-             _dl_debug_printf("zeroend > zeropage\n");
+             //_dl_debug_printf("zeroend > zeropage\n");
               /* Map the remaining zero pages in from the zero fill FD.  */
               //caddr_t mapat;
               //mapat = __mmap ((caddr_t) zeropage, zeroend - zeropage,
@@ -382,7 +382,7 @@ _dl_map_segments (struct link_map *l, int fd,
      fixed.  */
   ELF_FIXED_ADDRESS (loader, c->mapstart);
 
-  _dl_debug_printf("Buttom\n");
+  //_dl_debug_printf("Buttom\n");
 
   return NULL;
 }
