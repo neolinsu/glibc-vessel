@@ -55,6 +55,7 @@ static __always_inline uint32_t _rdpid_safe(void)
 {
 	uint32_t a, d, c;
 	asm volatile("rdtscp" : "=a" (a), "=d" (d), "=c" (c));
+  c &= 0xFFF;
 	return c;
 };
 
@@ -65,6 +66,7 @@ static __always_inline uint32_t _rdpid_safe(void)
     asm goto ( \
       "xor %%rcx, %%rcx\n\t" \
       "rdtscp\n\t" \
+      "andq $0xFFF, %%rcx\n\t" \
       "movabsq $0x8d06a000, %%rax\n\t" \
       "mov (%%rax, %%rcx, 4), %%eax\n\t" \
       "xor %%ecx, %%ecx\n\t" \
@@ -72,6 +74,7 @@ static __always_inline uint32_t _rdpid_safe(void)
       ".byte 0x0f,0x01,0xef\n\t" \
       "xor %%rcx, %%rcx\n\t" \
       "rdtscp\n\t" \
+      "andq $0xFFF, %%rcx\n\t" \
       "movabsq $0x8d06a000, %%rax\n\t" \
       "mov (%%rax, %%rcx, 4), %%ebx\n\t" \
       "xor %%ecx, %%ecx\n\t" \
@@ -87,6 +90,7 @@ static __always_inline uint32_t _rdpid_safe(void)
     asm ( \
       "xor %%rcx, %%rcx\n\t" \
       "rdtscp\n\t" \
+      "andq $0xFFF, %%rcx\n\t" \
       "movabsq $0x8d06a000, %%rax\n\t" \
       "mov (%%rax, %%rcx, 4), %0\n\t" \
       : "=r" (RES) : "m" (MEM_PTR) \

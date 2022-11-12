@@ -31,6 +31,7 @@ static __always_inline uint32_t _rdpid_safe(void)
 {
 	uint32_t a, d, c;
 	asm volatile("rdtscp" : "=a" (a), "=d" (d), "=c" (c));
+    c &= 0xFFF;
 	return c;
 };
 
