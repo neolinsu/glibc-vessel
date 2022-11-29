@@ -169,7 +169,7 @@ _dl_map_segments (struct link_map *l, int fd,
 {
   const struct loadcmd *c = loadcmds;
   struct minimal_ops *vops = NULL;
-  _dl_debug_printf("Vessel Version!!!\n");
+  //_dl_debug_printf("Vessel Version!!!\n");
 
   vops = vessel_get_ops();
   //_dl_debug_printf("After vessel_get_ops\n");
@@ -232,7 +232,8 @@ _dl_map_segments (struct link_map *l, int fd,
       //_dl_debug_printf("After get v_aligned_alloc\n");
       //void * dest = __mmap (NULL, maplength, c->prot | PROT_WRITE, MAP_ANON|MAP_PRIVATE|MAP_FIXED, -1, 0);
       void * dest = v_aligned_alloc(VESSEL_ALIGN_SIZE, VESSEL_UPPER_ALIGN(tend - tstart));
-      //_dl_debug_printf("After v_aligned_alloc size: %lu\n", VESSEL_UPPER_ALIGN(tend - tstart));
+      _dl_debug_printf("from 0x%0*lx ", (int) sizeof(void*) * 2, (long unsigned int) dest);
+      _dl_debug_printf("to 0x%0*lx\n", (int) sizeof(void*) * 2, (long unsigned int) dest + VESSEL_UPPER_ALIGN(tend - tstart));
 
       //struct stat64 st;
       //__fstat64(fd, &st);
@@ -244,7 +245,7 @@ _dl_map_segments (struct link_map *l, int fd,
       memcpy(dest, res, c->dataend - c->mapstart);
       //_dl_debug_printf("After memcpy: %lu\n", c->dataend - c->mapstart);
 
-      __munmap(res, maplength);
+      //__munmap(res, maplength);
 
       // if(__mprotect(dest, VESSEL_UPPER_ALIGN(maplength), c->prot)<0) {
       //   _dl_debug_printf("Fail to mprotect for %d\n", errno);

@@ -2048,6 +2048,8 @@ _dl_map_object (struct link_map *loader, const char *name,
 	}
 
       /* Try the LD_LIBRARY_PATH environment variable.  */
+    _dl_debug_printf("name: %s\n", name);
+	
       if (fd == -1 && env_path_list.dirs != (void *) -1)
 	fd = open_path (name, namelen, mode, &env_path_list,
 			&realname, &fb,
