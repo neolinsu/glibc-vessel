@@ -29,6 +29,8 @@
 #include <dl-tls.h>
 #include <ldsodefs.h>
 
+#include <rtld-vessel.h>
+
 #if THREAD_GSCOPE_IN_TCB
 # include <list.h>
 #endif
@@ -366,13 +368,18 @@ allocate_dtv (void *result)
   dtv_t *dtv;
   size_t dtv_length;
 
+  struct minimal_ops *vops = NULL;
+  vops = vessel_get_ops();
+
   /* Relaxed MO, because the dtv size is later rechecked, not relied on.  */
   size_t max_modid = atomic_load_relaxed (&GL(dl_tls_max_dtv_idx));
   /* We allocate a few more elements in the dtv than are needed for the
      initial set of modules.  This should avoid in most cases expansions
      of the dtv.  */
   dtv_length = max_modid + DTV_SURPLUS;
-  dtv = calloc (dtv_length + 2, sizeof (dtv_t));
+  // dtv = calloc (dtv_length + 2, sizeof (dtv_t));
+  v_calloc_t v_calloc = (v_calloc_t) vops->calloc;
+  dtv = v_calloc (dtv_length + 2, sizeof (dtv_t));
   if (dtv != NULL)
     {
       /* This is the initial length of the dtv.  */
@@ -422,7 +429,8 @@ _dl_allocate_tls_storage (void)
 {
   void *result;
   size_t size = GLRO (dl_tls_static_size);
-
+  struct minimal_ops *vops = NULL;
+  vops = vessel_get_ops();
 #if TLS_DTV_AT_TP
   /* Memory layout is:
      [ TLS_PRE_TCB_SIZE ] [ TLS_TCB_SIZE ] [ TLS blocks ]
@@ -433,7 +441,9 @@ _dl_allocate_tls_storage (void)
   /* Perform the allocation.  Reserve space for the required alignment
      and the pointer to the original allocation.  */
   size_t alignment = GLRO (dl_tls_static_align);
-  void *allocated = malloc (size + alignment + sizeof (void *));
+  // void *allocated = malloc (size + alignment + sizeof (void *));
+  v_malloc_t v_malloc = (v_malloc_t) vops->malloc;
+  void *allocated = v_malloc (size + alignment + sizeof (void *));
   if (__glibc_unlikely (allocated == NULL))
     return NULL;
 

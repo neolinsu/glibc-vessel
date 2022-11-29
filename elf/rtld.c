@@ -74,41 +74,74 @@
 # define RTLD_TIMING_SET(var, value) (var) = (value)
 # define RTLD_TIMING_REF(var)        &(var)
 
-void** vessel_cpupkrus_ptr = (void**) 0x8d06a000; // TODO
-
+#ifdef VESSEL_RTDL
+void* vessel_cpupkrus_ptr = (void*)0x8d06a000;
+void* vessel_reg_tls_ops_func = (void*)0x8d232000;
 static __always_inline uint32_t _rdpid_safe(void)
 {
 	uint32_t a, d, c;
 	asm volatile("rdtscp" : "=a" (a), "=d" (d), "=c" (c));
+  c &= 0xFFF;
 	return c;
 };
 
-#define __wrpkru_percpu(MEM_PTR) \
+#define __wrpkru_percpu() \
   do { \
   __label__ vessel_start; \
   vessel_start: \
     asm goto ( \
       "xor %%rcx, %%rcx\n\t" \
       "rdtscp\n\t" \
-      "movq %0, %%rax\n\t" \
-      "movq (%%rax, %%rcx, 8), %%rax\n\t" \
+      "andq $0xFFF, %%rcx\n\t" \
+      "movabsq $0x8d06a000, %%rax\n\t" \
+      "mov (%%rax, %%rcx, 4), %%eax\n\t" \
+      "xor %%ecx, %%ecx\n\t" \
+      "xor %%edx, %%edx\n\t" \
       ".byte 0x0f,0x01,0xef\n\t" \
       "xor %%rcx, %%rcx\n\t" \
       "rdtscp\n\t" \
-      "movq %0, %%rax\n\t" \
-      "movq (%%rax, %%rcx, 8), %%rcx\n\t" \
+      "andq $0xFFF, %%rcx\n\t" \
+      "movabsq $0x8d06a000, %%rax\n\t" \
+      "mov (%%rax, %%rcx, 4), %%ebx\n\t" \
+      "xor %%ecx, %%ecx\n\t" \
       "RDPKRU\n\t" \
-      "cmp %%ecx, %%eax\n\t" \
+      "cmp %%ebx, %%eax\n\t" \
       "jne %l1\n\t" \
-      : : "m" (MEM_PTR) \
-      : "rax", "rcx", "rdx": vessel_start \
+      ::"r"(vessel_cpupkrus_ptr):"rax", "rcx", "rdx", "rbx", "memory": vessel_start \
+    ); \
+  } while(0)
+
+#define get_pkru(MEM_PTR, RES) \
+  do { \
+    asm ( \
+      "xor %%rcx, %%rcx\n\t" \
+      "rdtscp\n\t" \
+      "andq $0xFFF, %%rcx\n\t" \
+      "movabsq $0x8d06a000, %%rax\n\t" \
+      "mov (%%rax, %%rcx, 4), %0\n\t" \
+      : "=r" (RES) : "m" (MEM_PTR) \
+      : "rax", "rcx" \
     ); \
   } while(0)
 
 #define erim_switch_to_untrusted()                   \
   do {                                               \
-    __wrpkru_percpu(vessel_cpupkrus_ptr);            \
+    __wrpkru_percpu();            \
   } while(0)
+
+
+// _dl_allocate_tls_storage
+// _dl_allocate_tls_init
+typedef void*(*allocate_tls_storage_t)(void); 
+typedef void*(*tls_init_t)(void*, bool); 
+typedef void(*deallocate_tls_t)(void*, bool);
+struct tls_ops {
+    allocate_tls_storage_t allocate_tls_storage;
+    tls_init_t tls_init;
+    deallocate_tls_t deallocate_tls;
+};
+typedef void(*register_tls_ops_func_t)(struct tls_ops*);
+#endif
 
 static inline void
 rtld_timer_start (hp_timing_t *var)
@@ -2055,6 +2088,15 @@ dl_main (const ElfW(Phdr) *phdr,
      an old kernel that can't perform TLS_INIT_TP, even if no TLS is ever
      used.  Trying to do it lazily is too hairy to try when there could be
      multiple threads (from a non-TLS-using libpthread).  */
+#ifdef VESSEL_RTDL
+  register_tls_ops_func_t reg_tls_ops_func = *((register_tls_ops_func_t*)vessel_reg_tls_ops_func);
+  struct tls_ops tls_ops = {
+    .allocate_tls_storage=_dl_allocate_tls_storage,
+    .tls_init=_dl_allocate_tls_init,
+    .deallocate_tls = _dl_deallocate_tls
+  };
+  reg_tls_ops_func(&tls_ops);
+#endif
   bool was_tls_init_tp_called = tls_init_tp_called;
   if (tcbp == NULL)
     tcbp = init_tls (0);
@@ -2547,8 +2589,11 @@ dl_main (const ElfW(Phdr) *phdr,
   /* We must munmap() the cache file.  */
   _dl_unload_cache ();
 #endif
-  // MPK
-  // 
+  #ifdef VESSEL_RTDL
+  unsigned int res = 0;
+  get_pkru(vessel_cpupkrus_ptr, res);
+  erim_switch_to_untrusted();
+#endif
   /* Once we return, _dl_sysdep_start will invoke
      the DT_INIT functions and then *USER_ENTRY.  */
 }
