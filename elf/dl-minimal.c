@@ -31,6 +31,10 @@
 
 #include <assert.h>
 
+#include <rtld-vessel.h>
+#ifdef VESSEL_RTDL
+static struct minimal_ops *miniops;
+#endif
 /* Minimal malloc allocator for used during initial link.  After the
    initial link, a full malloc implementation is interposed, either
    the one in libc, or a different one supplied by the user through
@@ -42,11 +46,17 @@ static void *alloc_ptr, *alloc_end, *alloc_last_block;
 extern void weak_function free (void *ptr);
 extern void * weak_function realloc (void *ptr, size_t n);
 
-
+void * weak_function malloc (size_t n);
 /* Allocate an aligned memory block.  */
 void * weak_function
 malloc (size_t n)
 {
+#ifdef VESSEL_RTDL
+  if (__glibc_unlikely(miniops==NULL)) {
+    miniops = vessel_get_ops();
+  }
+  return ((v_malloc_t) miniops->malloc)(n);
+#else
   if (alloc_end == 0)
     {
       /* Consume any unused space in the last page of our data segment.  */
@@ -82,6 +92,7 @@ malloc (size_t n)
   alloc_last_block = (void *) alloc_ptr;
   alloc_ptr += n;
   return alloc_last_block;
+#endif
 }
 
 /* We use this function occasionally since the real implementation may
@@ -90,6 +101,12 @@ malloc (size_t n)
 void * weak_function
 calloc (size_t nmemb, size_t size)
 {
+#ifdef VESSEL_RTDL
+  if (__glibc_unlikely(miniops==NULL)) {
+    miniops = vessel_get_ops();
+  }
+  return ((v_calloc_t) miniops->calloc)(nmemb, size);
+#else
   /* New memory from the trivial malloc above is always already cleared.
      (We make sure that's true in the rare occasion it might not be,
      by clearing memory in free, below.)  */
@@ -101,12 +118,19 @@ calloc (size_t nmemb, size_t size)
     return NULL;
 
   return malloc (bytes);
+#endif
 }
 
 /* This will rarely be called.  */
 void weak_function
 free (void *ptr)
 {
+#ifdef VESSEL_RTDL
+  if (__glibc_unlikely(miniops==NULL)) {
+    miniops = vessel_get_ops();
+  }
+  return ((v_free_t) miniops->free)(ptr);
+#else
   /* We can free only the last block allocated.  */
   if (ptr == alloc_last_block)
     {
@@ -115,12 +139,19 @@ free (void *ptr)
       memset (alloc_last_block, '\0', alloc_ptr - alloc_last_block);
       alloc_ptr = alloc_last_block;
     }
+#endif
 }
 
 /* This is only called with the most recent block returned by malloc.  */
 void * weak_function
 realloc (void *ptr, size_t n)
 {
+#ifdef VESSEL_RTDL
+  if (__glibc_unlikely(miniops==NULL)) {
+    miniops = vessel_get_ops();
+  }
+  return ((v_realloc_t) miniops->realloc)(ptr, n);
+#else
   if (ptr == NULL)
     return malloc (n);
   assert (ptr == alloc_last_block);
@@ -128,6 +159,7 @@ realloc (void *ptr, size_t n)
   alloc_ptr = alloc_last_block;
   void *new = malloc (n);
   return new != ptr ? memcpy (new, ptr, old_size) : new;
+#endif
 }
 
 /* Avoid signal frobnication in setjmp/longjmp.  Keeps things smaller.  */
