@@ -39,9 +39,9 @@ static struct minimal_ops *miniops;
    initial link, a full malloc implementation is interposed, either
    the one in libc, or a different one supplied by the user through
    interposition.  */
-
+#ifndef VESSEL_RTDL
 static void *alloc_ptr, *alloc_end, *alloc_last_block;
-
+#endif
 /* Declarations of global functions.  */
 extern void weak_function free (void *ptr);
 extern void * weak_function realloc (void *ptr, size_t n);
