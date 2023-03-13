@@ -246,10 +246,10 @@ _dl_map_segments (struct link_map *l, int fd,
 
       //__munmap(res, maplength);
 
-      // if(__mprotect(dest, VESSEL_UPPER_ALIGN(maplength), c->prot)<0) {
-      //   _dl_debug_printf("Fail to mprotect for %d\n", errno);
-      //   return DL_MAP_SEGMENTS_ERROR_MPROTECT;
-      // }
+      if(__mprotect(dest, VESSEL_UPPER_ALIGN(maplength), c->prot)<0) {
+         _dl_debug_printf("Fail to mprotect for %d\n", errno);
+         return DL_MAP_SEGMENTS_ERROR_MPROTECT;
+      }
 
       l->l_map_start = (ElfW(Addr)) dest;
       if (__glibc_unlikely ((void *) l->l_map_start == MAP_FAILED)) {
